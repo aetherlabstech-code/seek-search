@@ -94,6 +94,13 @@ def search_images(q):
         if d.get("murl"):
             out.append({"title": d.get("t", ""), "image": d["murl"],
                         "thumb": d.get("turl") or d["murl"], "url": d.get("purl")})
+    if not out:  # layout fallback: pull image URLs straight out of the page
+        txt = unescape(html)
+        for murl in dict.fromkeys(re.findall(r'"murl":"(https?://[^"]+)"', txt)):
+            out.append({"title": "", "image": murl, "thumb": murl, "url": murl})
+    if not out:
+        for src in dict.fromkeys(re.findall(r'(https://tse\d\.mm\.bing\.net/th/id/[^"&\s]+)', html)):
+            out.append({"title": "", "image": src, "thumb": src, "url": src})
     return out
 
 
@@ -136,7 +143,9 @@ class H(BaseHTTPRequestHandler):
                 try:
                     h = fetch(url)
                     info[name] = {"len": len(h), "head": h[:300],
-                                  "ytdata": "ytInitialData" in h}
+                                  "ytdata": "ytInitialData" in h,
+                                  "murl": h.count("murl"), "m_attr": h.count(' m="'),
+                                  "th": len(re.findall(r"mm\.bing\.net/th", h))}
                 except Exception as e:
                     info[name] = {"error": repr(e)}
             return self._send(200, json.dumps(info, ensure_ascii=False), "application/json; charset=utf-8")
