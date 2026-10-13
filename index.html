@@ -66,9 +66,19 @@ async function load(){
   $("#home").style.display="none";$("#hdr").style.display="flex";$("#tabs").style.display="flex";$("#q2").value=Q;document.title=Q+" - Seek";
   document.querySelectorAll(".tabs span").forEach(s=>s.classList.toggle("on",s.dataset.t==T));
   $("#main").innerHTML='<p class="msg">検索中…</p>';
-  const d=await api();render(d,false);
+  const want=location.href;const d=await api();if(location.href!=want)return;render(d,false);
 }
-async function api(){const r=await fetch(`/api/search?q=${encodeURIComponent(Q)}&type=${T}&page=${P}`);return r.json()}
+// Never hang on "検索中…": time out, retry (Render cold start / deploy returns non-JSON), then show the error.
+async function api(){
+  for(let i=0;i<3;i++){
+    try{const r=await fetch(`/api/search?q=${encodeURIComponent(Q)}&type=${T}&page=${P}`,{signal:AbortSignal.timeout(25000)});
+      if(r.ok)return await r.json();if(r.status==401){location.reload();return{results:[]}}
+    }catch(e){}
+    if(i<2&&!P)$("#main").innerHTML='<p class="msg">サーバー起動中…（少し待ってね）</p>';
+    await new Promise(r=>setTimeout(r,3000));
+  }
+  return{results:[],error:"サーバーに接続できませんでした。もう一度検索してください"};
+}
 function render(d,append){
   const m=$("#main");const R=d.results||[];
   if(!R.length&&!append){m.innerHTML=`<p class="msg">結果が見つかりませんでした${d.error?"（"+esc(d.error)+"）":""}</p>`;return}

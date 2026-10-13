@@ -25,7 +25,7 @@ def fetch(url, data=None, headers=None):
     h.update(headers or {})
     body = urllib.parse.urlencode(data).encode() if data else None
     req = urllib.request.Request(url, data=body, headers=h)
-    with urllib.request.urlopen(req, timeout=12) as r:
+    with urllib.request.urlopen(req, timeout=8) as r:
         return r.read().decode("utf-8", "replace")
 
 
@@ -147,16 +147,21 @@ def search_archive(q):
 
 
 def search_all_videos(q):
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(3) as ex:
-        futs = [ex.submit(fn, q) for fn in (search_videos, search_commons, search_archive)]
-        parts = []
-        for f in futs:
-            try:
-                parts.append(f.result())
-            except Exception:
-                traceback.print_exc()
-                parts.append([])
+    # Hard 8s budget: a slow source is dropped instead of stalling the whole response.
+    from concurrent.futures import ThreadPoolExecutor, wait
+    ex = ThreadPoolExecutor(3)
+    futs = [ex.submit(fn, q) for fn in (search_videos, search_commons, search_archive)]
+    wait(futs, timeout=8)
+    ex.shutdown(wait=False)
+    parts = []
+    for f in futs:
+        if not f.done():
+            print("video source timed out; skipped")
+            continue
+        try:
+            parts.append(f.result())
+        except Exception:
+            traceback.print_exc()
     return [v for part in parts for v in part]
 
 
