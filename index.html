@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Seek</title>
+<style>
+:root{--bg:#fff;--fg:#202124;--mut:#5f6368;--link:#1a0dab;--url:#188038;--line:#e8eaed;--card:#f8f9fa;--acc:#4f46e5}
+@media (prefers-color-scheme:dark){:root{--bg:#1f1f1f;--fg:#e8eaed;--mut:#9aa0a6;--link:#8ab4f8;--url:#81c995;--line:#3c4043;--card:#2a2a2a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,"Segoe UI","Hiragino Sans",sans-serif}
+a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}
+.home{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;gap:24px;padding:16px}
+.logo{font-size:56px;font-weight:700;letter-spacing:-2px;background:linear-gradient(90deg,#4285f4,#ea4335,#fbbc05,#34a853);-webkit-background-clip:text;color:transparent;cursor:pointer}
+form{display:flex;width:100%;max-width:640px;border:1px solid var(--line);border-radius:24px;padding:4px 6px 4px 18px;background:var(--bg)}
+form:focus-within{box-shadow:0 1px 6px rgba(0,0,0,.25)}
+input{flex:1;border:0;outline:0;background:transparent;color:var(--fg);font-size:16px}
+button{border:0;background:var(--acc);color:#fff;border-radius:20px;padding:8px 18px;font-size:14px;cursor:pointer}
+header{display:none;align-items:center;gap:20px;padding:16px 20px 0;flex-wrap:wrap}header .logo{font-size:28px}
+.tabs{display:none;gap:4px;padding:0 20px 0 140px;border-bottom:1px solid var(--line)}
+.tabs span{padding:10px 14px;cursor:pointer;color:var(--mut);border-bottom:3px solid transparent}
+.tabs span.on{color:var(--acc);border-color:var(--acc)}
+main{padding:16px 20px 60px 140px;max-width:1200px}
+.r{margin:0 0 26px;max-width:650px}.r .u{color:var(--url);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r h3{margin:2px 0;font-size:19px;font-weight:400}.r p{margin:0;color:var(--mut);font-size:14px}
+.wrap{display:flex;gap:40px;align-items:flex-start}.wiki{flex:0 0 320px;border:1px solid var(--line);border-radius:12px;padding:16px}
+.wiki img{width:100%;border-radius:8px;max-height:220px;object-fit:cover}.wiki h2{margin:8px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+.v{cursor:pointer}.v .th{position:relative}.v img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:12px;display:block}
+.v .len{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);color:#fff;font-size:12px;padding:1px 5px;border-radius:4px}
+.v h4{margin:8px 0 2px;font-size:15px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.v small{color:var(--mut)}
+.imgs{columns:5 200px;gap:10px}.imgs a{display:block;margin-bottom:10px;break-inside:avoid}.imgs img{width:100%;border-radius:8px;display:block;background:var(--card)}
+.player{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9;padding:16px}
+.player .box{width:min(960px,100%)}.player iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:12px}
+.player .x{color:#fff;text-align:right;cursor:pointer;font-size:22px}.player h3{color:#fff;margin:8px 0}
+.more{display:block;margin:10px auto;background:var(--card);color:var(--fg);border:1px solid var(--line)}
+.msg{color:var(--mut)}
+@media (max-width:800px){main,.tabs{padding-left:16px;padding-right:16px}.wrap{flex-direction:column-reverse}.wiki{flex:auto;width:100%}}
+</style>
+</head>
+<body>
+<div class="home" id="home">
+  <div class="logo">Seek</div>
+  <form id="f1"><input id="q1" placeholder="検索ワードを入力" autofocus><button>検索</button></form>
+</div>
+<header id="hdr"><div class="logo" onclick="location.href='/'">Seek</div>
+  <form id="f2"><input id="q2"><button>検索</button></form></header>
+<div class="tabs" id="tabs"><span data-t="web">すべて</span><span data-t="images">画像</span><span data-t="videos">動画</span></div>
+<main id="main"></main>
+<div class="player" id="player"><div class="box"><div class="x" onclick="closeP()">✕</div><iframe id="frame" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe><h3 id="ptitle"></h3></div></div>
+<script>
+const $=s=>document.querySelector(s);const esc=s=>(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let Q="",T="web",P=0;
+function go(q,t){if(!q.trim())return;const u=new URL(location);u.searchParams.set("q",q);u.searchParams.set("type",t||T);history.pushState(0,"",u);load();}
+$("#f1").onsubmit=e=>{e.preventDefault();go($("#q1").value,"web")};
+$("#f2").onsubmit=e=>{e.preventDefault();go($("#q2").value)};
+document.querySelectorAll(".tabs span").forEach(s=>s.onclick=()=>go(Q,s.dataset.t));
+onpopstate=load;
+async function load(){
+  const u=new URL(location);Q=u.searchParams.get("q")||"";T=u.searchParams.get("type")||"web";P=0;
+  if(!Q){$("#home").style.display="flex";$("#hdr").style.display=$("#tabs").style.display="none";$("#main").innerHTML="";return}
+  $("#home").style.display="none";$("#hdr").style.display="flex";$("#tabs").style.display="flex";$("#q2").value=Q;document.title=Q+" - Seek";
+  document.querySelectorAll(".tabs span").forEach(s=>s.classList.toggle("on",s.dataset.t==T));
+  $("#main").innerHTML='<p class="msg">検索中…</p>';
+  const d=await api();render(d,false);
+}
+async function api(){const r=await fetch(`/api/search?q=${encodeURIComponent(Q)}&type=${T}&page=${P}`);return r.json()}
+function render(d,append){
+  const m=$("#main");const R=d.results||[];
+  if(!R.length&&!append){m.innerHTML=`<p class="msg">結果が見つかりませんでした${d.error?"（"+esc(d.error)+"）":""}</p>`;return}
+  if(T=="videos"){m.innerHTML='<div class="grid">'+R.map(v=>`<div class="v" data-id="${v.id}" data-t="${esc(v.title)}"><div class="th"><img src="${v.thumb}" loading="lazy">${v.length?`<span class="len">${esc(v.length)}</span>`:""}</div><h4>${esc(v.title)}</h4><small>${esc(v.channel)}<br>${esc(v.views)} ${v.published?"・"+esc(v.published):""}</small></div>`).join("")+'</div>';
+    m.querySelectorAll(".v").forEach(e=>e.onclick=()=>play(e.dataset.id,e.dataset.t));return}
+  if(T=="images"){m.innerHTML='<div class="imgs">'+R.map(i=>`<a href="${esc(i.url)}" target="_blank" title="${esc(i.title)}"><img src="${esc(i.thumb)}" loading="lazy"></a>`).join("")+'</div>';return}
+  const list=R.map(r=>`<div class="r"><div class="u">${esc(r.url)}</div><h3><a href="${esc(r.url)}" target="_blank">${esc(r.title)}</a></h3><p>${esc(r.snippet)}</p></div>`).join("");
+  if(append){$("#list").insertAdjacentHTML("beforeend",list);}
+  else{const w=d.wiki;m.innerHTML=`<div class="wrap"><div><div id="list">${list}</div><button class="more" id="more">もっと見る</button></div>${w?`<aside class="wiki">${w.thumb?`<img src="${w.thumb}">`:""}<h2>${esc(w.title)}</h2><p>${esc(w.extract)}</p><a href="${esc(w.url)}" target="_blank">Wikipedia</a></aside>`:""}</div>`;}
+  $("#more").onclick=async()=>{P++;$("#more").textContent="読み込み中…";const d=await api();render(d,true);$("#more").textContent="もっと見る"};
+}
+function play(id,t){$("#frame").src=`https://www.youtube-nocookie.com/embed/${id}?autoplay=1`;$("#ptitle").textContent=t;$("#player").style.display="flex"}
+function closeP(){$("#frame").src="";$("#player").style.display="none"}
+$("#player").onclick=e=>{if(e.target.id=="player")closeP()};
+load();
+</script>
+</body>
+</html>

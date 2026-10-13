@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: seek-search
+    runtime: python
+    plan: free
+    buildCommand: "echo no deps"
+    startCommand: "python server.py"
