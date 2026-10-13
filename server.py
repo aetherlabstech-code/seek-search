@@ -127,6 +127,19 @@ class H(BaseHTTPRequestHandler):
         p = urllib.parse.urlparse(self.path)
         if p.path in ("/", "/index.html"):
             return self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+        if p.path == "/api/debug":
+            info = {}
+            for name, url in [("ddg", "https://html.duckduckgo.com/html/?q=test"),
+                              ("bing", "https://www.bing.com/search?q=test"),
+                              ("yt", "https://www.youtube.com/results?search_query=test"),
+                              ("bingimg", "https://www.bing.com/images/search?q=test")]:
+                try:
+                    h = fetch(url)
+                    info[name] = {"len": len(h), "head": h[:300],
+                                  "ytdata": "ytInitialData" in h}
+                except Exception as e:
+                    info[name] = {"error": repr(e)}
+            return self._send(200, json.dumps(info, ensure_ascii=False), "application/json; charset=utf-8")
         if p.path == "/api/search":
             qs = urllib.parse.parse_qs(p.query)
             q = qs.get("q", [""])[0].strip()
