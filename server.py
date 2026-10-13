@@ -34,6 +34,38 @@ def strip_tags(s):
 
 
 def search_web(q, page=0):
+    # DDG blocks datacenter IPs (Render) with a challenge page -> fall back to Bing.
+    try:
+        out = search_web_ddg(q, page)
+    except Exception:
+        traceback.print_exc()
+        out = []
+    return out or search_web_bing(q, page)
+
+
+def search_web_bing(q, page=0):
+    html = fetch("https://www.bing.com/search?setlang=ja&cc=JP&q=" + urllib.parse.quote(q)
+                 + f"&first={page * 10 + 1}")
+    out = []
+    for b in re.split(r'<li class="b_algo', html)[1:]:
+        m = re.search(r'<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
+        if not m:
+            continue
+        url = unescape(m.group(1))
+        u = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("u")
+        if "bing.com/ck/" in url and u:  # tracking redirect: u=a1<base64url>
+            try:
+                s = u[0][2:]
+                url = base64.urlsafe_b64decode(s + "=" * (-len(s) % 4)).decode()
+            except Exception:
+                pass
+        sn = re.search(r'<p[^>]*>(.*?)</p>', b, re.S)
+        out.append({"title": strip_tags(m.group(2)), "url": url,
+                    "snippet": strip_tags(sn.group(1)) if sn else ""})
+    return out
+
+
+def search_web_ddg(q, page=0):
     html = fetch("https://html.duckduckgo.com/html/",
                  {"q": q, "kl": "jp-jp", "s": str(page * 30)})
     out = []

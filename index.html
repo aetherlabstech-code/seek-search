@@ -79,9 +79,10 @@ async function load(){
 // Never hang on "検索中…": time out, retry (Render cold start / deploy returns non-JSON), then show the error.
 async function api(){
   for(let i=0;i<3;i++){
-    try{const r=await fetch(`/api/search?q=${encodeURIComponent(Q)}&type=${T}&page=${P}`,{signal:AbortSignal.timeout(25000)});
+    const ac=window.AbortController?new AbortController():null;const tm=setTimeout(()=>ac&&ac.abort(),25000);
+    try{const r=await fetch(`/api/search?q=${encodeURIComponent(Q)}&type=${T}&page=${P}`,ac?{signal:ac.signal}:{});
       if(r.ok)return await r.json();if(r.status==401){location.reload();return{results:[]}}
-    }catch(e){}
+    }catch(e){console.error(e)}finally{clearTimeout(tm)}
     if(i<2&&!P)$("#main").innerHTML='<p class="msg">サーバー起動中…（少し待ってね）</p>';
     await new Promise(r=>setTimeout(r,3000));
   }
