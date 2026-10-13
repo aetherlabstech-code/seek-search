@@ -253,8 +253,10 @@ class H(BaseHTTPRequestHandler):
                 elif kind == "images":
                     res = {"results": search_images(q)}
                 else:
-                    res = {"results": search_web(q, page),
-                           "wiki": wiki_summary(q) if page == 0 else None}
+                    from concurrent.futures import ThreadPoolExecutor
+                    with ThreadPoolExecutor(2) as ex:  # web + wiki in parallel, not back-to-back
+                        wf = ex.submit(wiki_summary, q) if page == 0 else None
+                        res = {"results": search_web(q, page), "wiki": wf.result() if wf else None}
             except Exception as e:
                 traceback.print_exc()
                 res = {"results": [], "error": str(e)}

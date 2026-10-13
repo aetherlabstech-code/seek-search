@@ -1,0 +1,11 @@
+# Render free tier sleeps after 15 min idle (30-60s cold start). Ping every 10 min to keep it warm.
+name: keepalive
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" --max-time 90 https://seek-search-n9xd.onrender.com/ || true
