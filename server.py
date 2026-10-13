@@ -2,7 +2,10 @@
 Run: python server.py  ->  http://localhost:8765
 No API keys, stdlib only.
 """
+import base64
+import hmac
 import json
+import os
 import re
 import traceback
 import urllib.parse
@@ -78,8 +81,83 @@ def search_videos(q):
         out.append({"id": vid, "title": txt("title"), "channel": txt("ownerText"),
                     "length": txt("lengthText"), "views": txt("viewCountText"),
                     "published": txt("publishedTimeText"),
-                    "thumb": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"})
+                    "thumb": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg", "src": "yt"})
     return out
+
+
+def _dur(sec):
+    try:
+        s = int(float(sec))
+    except (TypeError, ValueError):
+        return ""
+    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
+
+
+def search_commons(q):
+    """Wikimedia Commons: freely licensed video files, playable directly in <video>."""
+    d = json.loads(fetch(
+        "https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search"
+        "&gsrnamespace=6&gsrlimit=12&prop=imageinfo&iiprop=url|metadata|user&iiurlwidth=480"
+        "&gsrsearch=" + urllib.parse.quote("filetype:video " + q)))
+    pages = sorted((d.get("query") or {}).get("pages", {}).values(), key=lambda p: p.get("index", 0))
+    out = []
+    for p in pages:
+        ii = (p.get("imageinfo") or [{}])[0]
+        if not ii.get("url"):
+            continue
+        meta = {m.get("name"): m.get("value") for m in ii.get("metadata") or []}
+        title = re.sub(r"^File:|\.(webm|ogv|ogg|mpg|mpeg)$", "", p.get("title", ""), flags=re.I)
+        out.append({"id": ii["url"], "file": ii["url"], "title": title,
+                    "channel": ii.get("user", ""), "length": _dur(meta.get("playtime_seconds")),
+                    "views": "Wikimedia Commons", "published": "", "src": "commons",
+                    "thumb": ii.get("thumburl", ""), "page": ii.get("descriptionurl")})
+    return out
+
+
+def _archive_item(doc):
+    ident = doc["identifier"]
+    try:
+        files = json.loads(fetch(f"https://archive.org/metadata/{ident}/files")).get("result", [])
+    except Exception:
+        traceback.print_exc()
+        return None
+    mp4 = [f for f in files if f.get("name", "").lower().endswith(".mp4")]
+    if not mp4:
+        return None
+    f = min(mp4, key=lambda f: int(f.get("size") or 1 << 62))  # smallest = fastest to stream
+    creator = doc.get("creator") or ""
+    return {"id": ident, "file": f"https://archive.org/download/{ident}/{urllib.parse.quote(f['name'])}",
+            "title": doc.get("title") or ident,
+            "channel": creator if isinstance(creator, str) else ", ".join(creator),
+            "length": _dur(f.get("length")), "views": "Internet Archive", "published": str(doc.get("year") or ""),
+            "src": "archive", "thumb": f"https://archive.org/services/img/{ident}",
+            "page": f"https://archive.org/details/{ident}"}
+
+
+def search_archive(q):
+    """Internet Archive: public-domain / CC movies, playable directly in <video>."""
+    d = json.loads(fetch(
+        "https://archive.org/advancedsearch.php?output=json&rows=10&sort[]=downloads+desc"
+        "&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&q="
+        + urllib.parse.quote(f"({q}) AND mediatype:movies")))
+    docs = (d.get("response") or {}).get("docs", [])
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(8) as ex:
+        return [r for r in ex.map(_archive_item, docs) if r]
+
+
+def search_all_videos(q):
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(3) as ex:
+        futs = [ex.submit(fn, q) for fn in (search_videos, search_commons, search_archive)]
+        parts = []
+        for f in futs:
+            try:
+                parts.append(f.result())
+            except Exception:
+                traceback.print_exc()
+                parts.append([])
+    return [v for part in parts for v in part]
 
 
 def search_images(q):
@@ -130,7 +208,22 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    def _authorized(self):
+        # Private mode: set SEEK_PASSWORD (and optionally SEEK_USER) on the host. Unset = open (local dev).
+        pw = os.environ.get("SEEK_PASSWORD")
+        if not pw:
+            return True
+        want = base64.b64encode(f"{os.environ.get('SEEK_USER', 'seek')}:{pw}".encode()).decode()
+        got = self.headers.get("Authorization", "")
+        return hmac.compare_digest(got.encode(), f"Basic {want}".encode())
+
     def do_GET(self):
+        if not self._authorized():
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="Seek", charset="UTF-8"')
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         p = urllib.parse.urlparse(self.path)
         if p.path in ("/", "/index.html"):
             return self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
@@ -156,7 +249,7 @@ class H(BaseHTTPRequestHandler):
             page = int(qs.get("page", ["0"])[0] or 0)
             try:
                 if kind == "videos":
-                    res = {"results": search_videos(q)}
+                    res = {"results": search_all_videos(q)}
                 elif kind == "images":
                     res = {"results": search_images(q)}
                 else:
