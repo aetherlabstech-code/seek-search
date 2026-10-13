@@ -39,6 +39,7 @@ main{padding:16px 20px 60px 140px;max-width:1200px}
 .player .x{color:#fff;text-align:right;cursor:pointer;font-size:22px}.player h3{color:#fff;margin:8px 0}
 .more{display:block;margin:10px auto;background:var(--card);color:var(--fg);border:1px solid var(--line)}
 .msg{color:var(--mut)}
+.apps{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}.apps a{padding:8px 16px;border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--fg);font-size:14px}.apps a:hover{text-decoration:none;border-color:var(--acc)}
 @media (max-width:800px){main,.tabs{padding-left:16px;padding-right:16px}.wrap{flex-direction:column-reverse}.wiki{flex:auto;width:100%}}
 </style>
 </head>
@@ -46,6 +47,13 @@ main{padding:16px 20px 60px 140px;max-width:1200px}
 <div class="home" id="home">
   <div class="logo">Seek</div>
   <form id="f1"><input id="q1" placeholder="検索ワードを入力" autofocus><button>検索</button></form>
+  <div class="apps">
+    <a href="https://claude.ai/code" target="_blank" rel="noopener">Claude Code</a>
+    <a href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a>
+    <a href="https://mail.google.com/" target="_blank" rel="noopener">Gmail</a>
+    <a href="https://www.youtube.com/" target="_blank" rel="noopener">YouTube</a>
+    <a href="https://github.com/" target="_blank" rel="noopener">GitHub</a>
+  </div>
 </div>
 <header id="hdr"><div class="logo" onclick="location.href='/'">Seek</div>
   <form id="f2"><input id="q2"><button>検索</button></form></header>
